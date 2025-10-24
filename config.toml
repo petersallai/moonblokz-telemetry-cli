@@ -1,7 +1,0 @@
-# Telemetry CLI Configuration
-
-# API key to authenticate with the hub's /command endpoint
-api-key = "your-cli-api-key-here"
-
-# Base URL of the hub (without the /command suffix)
-hub-url = "https://your-hub-url.example.com"
