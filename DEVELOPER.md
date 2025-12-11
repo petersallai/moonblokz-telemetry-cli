@@ -42,6 +42,7 @@ Implements the command grammar parser with the following features:
   - `UpdateNode` - Firmware updates for RP2040
   - `UpdateProbe` - Probe self-updates
   - `RebootProbe` - Raspberry Pi reboot
+  - `StartMeasurement` - Start measurement sequence (node_id required)
   - `Quit` - Exit interactive mode
 
 Each command converts to JSON format matching the hub's API specification.
@@ -82,12 +83,13 @@ command_name(param1=value1, param2=value2, ...)
 
 ### Parameter Types
 
-- **node_id**: Optional `u32` - if omitted, targets all nodes
+- **node_id**: Optional `u32` - if omitted, targets all nodes (required for start_measurement)
 - **start_time/end_time**: ISO 8601 timestamp (e.g., `2025-10-23T15:30+01`)
 - **active_period/inactive_period**: `u64` seconds
 - **log_level**: Enum of `TRACE|DEBUG|INFO|WARN|ERROR`
 - **log_filter**: String (substring match)
 - **command**: String (raw USB command)
+- **sequence**: `u32` (measurement sequence number)
 
 ### Timestamp Handling
 

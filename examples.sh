@@ -39,6 +39,10 @@ echo "Example 6: Send arbitrary command to node 21"
 $CLI --command "command(node_id=21, command=\"/LT\")"
 echo ""
 
+echo "Example 7: Start measurement sequence on node 21"
+$CLI --command "start_measurement(node_id=21, sequence=1)"
+echo ""
+
 echo ""
 echo "For interactive mode, run: $CLI"
 echo "In interactive mode, you can enter commands one at a time."

@@ -14,6 +14,7 @@ A command-line interface for sending commands to MoonBlokz probes via the teleme
   - `update_node` - Trigger node firmware updates
   - `update_probe` - Trigger probe self-updates
   - `reboot_probe` - Reboot probe Raspberry Pi
+  - `start_measurement` - Start a measurement sequence on a node
 
 ## Configuration
 
@@ -133,6 +134,14 @@ Reboot the Raspberry Pi:
 reboot_probe(node_id=21)
 ```
 
+### Start Measurement
+
+Start a measurement sequence on a specific node (node_id is required):
+
+```
+start_measurement(node_id=21, sequence=1)
+```
+
 ## Exit Commands
 
 In interactive mode, use any of these to exit:
@@ -159,11 +168,15 @@ Type 'quit', 'exit', or 'bye' to exit
 OK
 > update_node(node_id=21)
 OK
+> start_measurement(node_id=21, sequence=1)
+OK
 > quit
 Goodbye!
 
 # Single command
 $ moonblokz-telemetry-cli --command "set_log_level(node_id=21, log_level=INFO)"
+OK
+$ moonblokz-telemetry-cli --command "start_measurement(node_id=21, sequence=42)"
 OK
 ```
 

@@ -36,7 +36,7 @@ This is a complete implementation of the **Telemetry CLI** component from the Mo
 
 ### ✅ Command Support
 
-All seven command types from the specification:
+All command types:
 
 1. **set_update_interval** - Modify probe upload schedules with time windows
 2. **set_log_level** - Change node verbosity (TRACE/DEBUG/INFO/WARN/ERROR)
@@ -45,6 +45,7 @@ All seven command types from the specification:
 5. **update_node** - Trigger RP2040 firmware updates
 6. **update_probe** - Trigger probe self-updates
 7. **reboot_probe** - Reboot Raspberry Pi
+8. **start_measurement** - Start measurement sequence on a specific node (node_id required)
 
 ### ✅ Command Grammar Features
 

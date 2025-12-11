@@ -116,6 +116,22 @@ Reboot all probes:
 moonblokz-telemetry-cli --command "reboot_probe()"
 ```
 
+### 7. Start Measurement
+
+Start a measurement sequence on a specific node (node_id is required):
+
+```bash
+moonblokz-telemetry-cli --command "start_measurement(node_id=21, sequence=1)"
+```
+
+Start a different measurement sequence:
+
+```bash
+moonblokz-telemetry-cli --command "start_measurement(node_id=42, sequence=100)"
+```
+
+Note: Unlike other commands, `start_measurement` always requires a node_id.
+
 ## Interactive Mode Examples
 
 ### Session 1: Basic Monitoring Setup
@@ -128,6 +144,8 @@ Type 'quit', 'exit', or 'bye' to exit
 > set_log_level(node_id=21, log_level=DEBUG)
 OK
 > set_log_filter(node_id=21, log_filter="[DEBUG]")
+OK
+> start_measurement(node_id=21, sequence=1)
 OK
 > quit
 Goodbye!
@@ -207,6 +225,12 @@ Invalid timestamp:
 ```bash
 $ moonblokz-telemetry-cli --command "set_update_interval(node_id=21, start_time=invalid, end_time=2025-10-23T18:00:00Z, active_period=60, inactive_period=300)"
 Parse error: Invalid ISO 8601 timestamp: invalid
+```
+
+Missing required node_id for start_measurement:
+```bash
+$ moonblokz-telemetry-cli --command "start_measurement(sequence=1)"
+Parse error: node_id is required for start_measurement command
 ```
 
 ### HTTP Errors
@@ -293,6 +317,26 @@ moonblokz-telemetry-cli --command "update_probe(node_id=21)"
 moonblokz-telemetry-cli --command "reboot_probe(node_id=21)"
 ```
 
+### Scenario 6: Measurement Sequence
+
+Goal: Start coordinated measurements across multiple nodes
+
+```bash
+# Enable detailed logging for nodes involved in measurement
+moonblokz-telemetry-cli --command "set_log_level(node_id=21, log_level=DEBUG)"
+moonblokz-telemetry-cli --command "set_log_level(node_id=42, log_level=DEBUG)"
+
+# Start measurement sequence on node 21
+moonblokz-telemetry-cli --command "start_measurement(node_id=21, sequence=1)"
+
+# Start measurement sequence on node 42
+moonblokz-telemetry-cli --command "start_measurement(node_id=42, sequence=2)"
+
+# Increase upload frequency to capture measurement data
+moonblokz-telemetry-cli --command "set_update_interval(node_id=21, start_time=2025-12-11T00:00:00Z, end_time=2025-12-12T00:00:00Z, active_period=10, inactive_period=10)"
+moonblokz-telemetry-cli --command "set_update_interval(node_id=42, start_time=2025-12-11T00:00:00Z, end_time=2025-12-12T00:00:00Z, active_period=10, inactive_period=10)"
+```
+
 ## Batch Operations Script
 
 For automating multiple commands, create a shell script:
@@ -310,9 +354,31 @@ $CLI --command "set_log_level(log_level=DEBUG)"
 $CLI --command "set_log_filter(log_filter=\"\")"
 
 # Set active upload during work hours (8 AM - 6 PM EST)
-$CLI --command "set_update_interval(start_time=2025-10-23T08:00:00-05:00, end_time=2025-10-23T18:00:00-05:00, active_period=60, inactive_period=300)"
+$CLI --command "set_update_interval(start_time=2025-12-11T08:00:00-05:00, end_time=2025-12-11T18:00:00-05:00, active_period=60, inactive_period=300)"
 
 echo "Development environment configured!"
+```
+
+### Measurement Test Script
+
+```bash
+#!/bin/bash
+# run-measurement-test.sh
+
+CLI="moonblokz-telemetry-cli"
+NODE_ID=21
+SEQUENCE=$((RANDOM % 1000 + 1))
+
+echo "Starting measurement test on node $NODE_ID with sequence $SEQUENCE..."
+
+# Configure node for measurement
+$CLI --command "set_log_level(node_id=$NODE_ID, log_level=INFO)"
+$CLI --command "set_update_interval(node_id=$NODE_ID, start_time=$(date -u +%Y-%m-%dT%H:%M:%SZ), end_time=$(date -u -d '+1 hour' +%Y-%m-%dT%H:%M:%SZ), active_period=15, inactive_period=15)"
+
+# Start measurement
+$CLI --command "start_measurement(node_id=$NODE_ID, sequence=$SEQUENCE)"
+
+echo "Measurement sequence $SEQUENCE started on node $NODE_ID"
 ```
 
 ## Troubleshooting Commands
