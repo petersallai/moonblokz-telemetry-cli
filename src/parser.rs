@@ -5,7 +5,6 @@ use serde_json::{json, Value};
 #[derive(Debug, Clone)]
 pub enum Command {
     SetUpdateInterval {
-        node_id: Option<u32>,
         start_time: DateTime<Utc>,
         end_time: DateTime<Utc>,
         active_period: u64,
@@ -43,22 +42,17 @@ impl Command {
     pub fn to_json(&self) -> Result<Value> {
         match self {
             Command::SetUpdateInterval {
-                node_id,
                 start_time,
                 end_time,
                 active_period,
                 inactive_period,
             } => {
-                let mut params = json!({
+                let params = json!({
                     "start_time": start_time.to_rfc3339(),
                     "end_time": end_time.to_rfc3339(),
                     "active_period": active_period,
                     "inactive_period": inactive_period,
                 });
-
-                if let Some(id) = node_id {
-                    params["node id"] = json!(id);
-                }
 
                 Ok(json!({
                     "command": "set_update_interval",
@@ -294,7 +288,11 @@ fn parse_iso_timestamp(s: &str) -> Result<DateTime<Utc>> {
 
 fn parse_set_update_interval(params_str: &str) -> Result<Command> {
     let params = parse_params(params_str)?;
-    let node_id = parse_node_id(&params)?;
+
+    // Reject node_id parameter - this command targets all probes
+    if get_param(&params, "node_id").is_some() {
+        return Err(anyhow!("set_update_interval does not accept node_id parameter"));
+    }
 
     let start_time_str = get_param(&params, "start_time").ok_or_else(|| anyhow!("Missing start_time parameter"))?;
     let end_time_str = get_param(&params, "end_time").ok_or_else(|| anyhow!("Missing end_time parameter"))?;
@@ -311,7 +309,6 @@ fn parse_set_update_interval(params_str: &str) -> Result<Command> {
         .map_err(|_| anyhow!("Invalid inactive_period: must be a positive integer"))?;
 
     Ok(Command::SetUpdateInterval {
-        node_id,
         start_time,
         end_time,
         active_period,

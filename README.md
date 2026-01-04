@@ -66,13 +66,7 @@ moonblokz-telemetry-cli --command "set_log_level(node_id=21, log_level=DEBUG)"
 
 ### Set Update Interval
 
-Change the upload schedule for a probe:
-
-```
-set_update_interval(node_id=21, start_time=2025-10-23T15:30+01, end_time=2025-10-23T18:00+01, active_period=60, inactive_period=300)
-```
-
-Omit `node_id` to target all probes:
+Change the upload schedule for all probes:
 
 ```
 set_update_interval(start_time=2025-10-23T15:30+01, end_time=2025-10-23T18:00+01, active_period=60, inactive_period=300)
