@@ -97,7 +97,7 @@ impl Command {
                 }
 
                 Ok(json!({
-                    "command": "command",
+                    "command": "run_command",
                     "parameters": params,
                 }))
             }
@@ -189,7 +189,7 @@ pub fn parse_command(input: &str) -> Result<Command> {
             let params = params_str.ok_or_else(|| anyhow!("set_log_filter requires parameters"))?;
             parse_set_log_filter(params)
         }
-        "command" => {
+        "run_command" => {
             let params = params_str.ok_or_else(|| anyhow!("command requires parameters"))?;
             parse_command_cmd(params)
         }
