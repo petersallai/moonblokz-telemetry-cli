@@ -2,15 +2,15 @@
 
 ## Architecture
 
-The MoonBlokz Telemetry CLI is built in Rust using Tokio for async runtime and follows a modular architecture:
+The MoonBlokz Telemetry CLI is built in Rust using Tokio for async runtime and follows a modular architecture.
 
 ### Module Structure
 
-```
+```text
 src/
 ├── main.rs       - Entry point, CLI argument parsing, REPL implementation
 ├── config.rs     - Configuration loading from TOML
-├── parser.rs     - Command grammar parser
+├── parser.rs     - Command grammar parser and JSON conversion
 └── client.rs     - HTTP client for hub communication
 ```
 
@@ -26,37 +26,45 @@ src/
 
 #### 2. Parser Module (`parser.rs`)
 
-Implements the command grammar parser with the following features:
+Implements the current command grammar parser with the following features:
 
 - **Case-insensitive** command parsing
-- **Flexible parameter parsing** with support for:
-  - Integer node IDs
+- **Case-insensitive** parameter-key lookup
+- **Parameter parsing** with support for:
+  - integer node IDs
   - ISO 8601 timestamps with timezone conversion to UTC
-  - String values (with or without quotes)
-  - Enumerated values (log levels)
-- **Command variants**:
-  - `SetUpdateInterval` - Scheduling parameters
+  - unquoted string values
+  - double-quoted values for comma grouping
+  - enumerated values for log levels
+- **Current command variants**:
+  - `SetUpdateInterval` - Global scheduling parameters
   - `SetLogLevel` - Verbosity control
   - `SetLogFilter` - Filter string updates
-  - `Command` - Raw USB commands
+  - `Command` - Raw USB command transport via JSON command name `run_command`
   - `UpdateNode` - Firmware updates for RP2040
   - `UpdateProbe` - Probe self-updates
   - `RebootProbe` - Raspberry Pi reboot
-  - `StartMeasurement` - Start measurement sequence (node_id required)
+  - `StartMeasurement` - Start measurement sequence (`node_id` required)
   - `Quit` - Exit interactive mode
 
-Each command converts to JSON format matching the hub's API specification.
+Each command converts to JSON format matching the current hub request contract.
+
+#### Important current parser limitations
+
+- The top-level parser currently accepts `run_command(...)`, not `command(...)`.
+- `set_update_interval(...)` currently rejects `node_id` and therefore behaves as a global CLI command.
+- Double quotes are preserved in parsed string values rather than stripped after tokenization.
 
 #### 3. Client Module (`client.rs`)
 
 - Uses `reqwest` for HTTP/HTTPS communication
-- Sends POST requests to `/command` endpoint
+- Sends POST requests to the `/command` endpoint
 - Handles HTTP status codes:
   - `200 OK` → Success
   - `401 Unauthorized` → Invalid API key
-  - `4xx` → Client errors
+  - other `4xx` → Client errors
   - `5xx` → Server errors
-- 30-second timeout for requests
+- Uses a 30-second timeout for requests
 
 #### 4. Main Module (`main.rs`)
 
@@ -65,79 +73,105 @@ Each command converts to JSON format matching the hub's API specification.
   1. **Single command mode**: Execute one command and exit
   2. **Interactive mode**: REPL for multiple commands
 - Error handling and user feedback
+- Exit-on-auth-failure behavior in interactive mode
 
 ## Data Flow
 
-```
-User Input → Parser → Command Struct → JSON Payload → HTTP Client → Telemetry Hub
+```text
+User Input → Parser → Command Enum → JSON Payload → HTTP Client → Telemetry Hub
                 ↓
-            Validation
+            Local validation
 ```
 
 ## Command Grammar
 
 Commands follow this general pattern:
-```
+
+```text
 command_name(param1=value1, param2=value2, ...)
 ```
 
+### Current accepted command names
+
+- `set_update_interval`
+- `set_log_level`
+- `set_log_filter`
+- `run_command`
+- `update_node`
+- `update_probe`
+- `reboot_probe`
+- `start_measurement`
+- `quit`
+- `exit`
+- `bye`
+
 ### Parameter Types
 
-- **node_id**: Optional `u32` - if omitted, targets all nodes (required for start_measurement)
-- **start_time/end_time**: ISO 8601 timestamp (e.g., `2025-10-23T15:30+01`)
+- **node_id**: Optional `u32` for most commands, required for `start_measurement`
+- **start_time/end_time**: ISO 8601 timestamp with timezone
 - **active_period/inactive_period**: `u64` seconds
 - **log_level**: Enum of `TRACE|DEBUG|INFO|WARN|ERROR`
-- **log_filter**: String (substring match)
-- **command**: String (raw USB command)
-- **sequence**: `u32` (measurement sequence number)
+- **log_filter**: String value
+- **command**: String value for `run_command(...)`
+- **sequence**: `u32` measurement sequence number
 
 ### Timestamp Handling
 
-The parser accepts ISO 8601 timestamps with timezone information and converts them to UTC:
+The parser accepts ISO 8601 timestamps with timezone information and converts them to UTC.
 
-```rust
-// Supported formats:
-"2025-10-23T15:30:00+01:00"  // RFC 3339
-"2025-10-23T15:30+01"         // Short format
-"2025-10-23T15:30:00Z"        // UTC
+Supported examples include:
+
+```text
+2025-10-23T15:30:00+01:00
+2025-10-23T15:30+01
+2025-10-23T15:30:00Z
 ```
 
 All timestamps are converted to UTC and formatted as RFC 3339 before sending to the hub.
 
 ## JSON API Format
 
-Commands are sent as JSON to the hub:
+Commands are sent as JSON to the hub in the form:
 
 ```json
 {
   "command": "command_name",
   "parameters": {
-    "node id": 21,           // Optional
-    "param1": "value1",
-    ...
+    "node id": 21,
+    "param1": "value1"
   }
 }
 ```
 
-Note: The hub uses `"node id"` (with space) in the JSON, not `node_id`.
+Important details:
+
+- The CLI input syntax uses `node_id`
+- The JSON payload uses `"node id"` with a space
+- The raw-command command name sent to the hub is `run_command`
 
 ## Error Handling
 
 ### Parse Errors
 
-- Missing required parameters
-- Invalid parameter types
-- Unknown command names
-- Malformed timestamps
+Examples of locally detected parse errors:
+
+- missing required parameters
+- invalid parameter types
+- unknown command names
+- malformed timestamps
+- missing closing parenthesis
+- `node_id` supplied for `set_update_interval`
 
 All parse errors are reported to the user without sending a request.
 
 ### HTTP Errors
 
-- **401 Unauthorized**: Terminates in single-command mode, exits in interactive mode
-- **400 Bad Request**: Reports error, continues
-- **5xx Server Error**: Reports error, continues (user can retry)
-- **Network errors**: Reports error with context
+- **401 Unauthorized**:
+  - single-command mode exits with status 1
+  - interactive mode prints an authentication hint and exits with status 1
+- **Other 4xx**: reports error and continues in interactive mode
+- **5xx Server Error**: reports error and continues in interactive mode
+- **Network errors**: reports error with context
 
 ## Testing
 
@@ -147,28 +181,25 @@ Run the test suite:
 cargo test
 ```
 
-### Test Coverage
+### Current test coverage
 
-- Command parsing for all command types
-- Node ID handling (with and without)
-- Quit command detection
-- Parameter extraction
+The repository currently includes parser tests for:
 
-### Adding Tests
+- quit command detection
+- set log level parsing
+- update node parsing with and without `node_id`
+- start measurement parsing
+- start measurement requiring `node_id`
 
-Tests are located in each module using `#[cfg(test)]` blocks:
+### Recommended future coverage
 
-```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
+Add tests for areas that are currently especially drift-prone:
 
-    #[test]
-    fn test_my_feature() {
-        // Test code
-    }
-}
-```
+- `run_command(...)` acceptance
+- rejection of `command(...)`
+- rejection of `set_update_interval(node_id=...)`
+- quoted string behavior
+- invalid timestamp formats
 
 ## Building and Running
 
@@ -186,10 +217,10 @@ cargo build --release
 ./target/release/moonblokz-telemetry-cli
 ```
 
-### With Verbose Logging
+### Single Command Example
 
 ```bash
-RUST_LOG=debug cargo run
+cargo run -- --command "run_command(node_id=21, command=/LT)"
 ```
 
 ## Dependencies
@@ -197,7 +228,7 @@ RUST_LOG=debug cargo run
 Key dependencies and their purposes:
 
 - `tokio` - Async runtime
-- `reqwest` - HTTP client with TLS support
+- `reqwest` - HTTP client
 - `serde` + `serde_json` - JSON serialization
 - `toml` - Configuration file parsing
 - `clap` - Command-line argument parsing
@@ -208,129 +239,61 @@ Key dependencies and their purposes:
 
 ### Adding a New Command
 
-1. **Add command variant to `Command` enum** in `parser.rs`:
+1. **Add command variant to `Command` enum** in `parser.rs`
+2. **Add JSON conversion** in `Command::to_json()`
+3. **Add parser function** for the new command
+4. **Add the command name to the dispatcher** in `parse_command()`
+5. **Add tests** for both valid and invalid forms
+6. **Update docs and examples** so the public command syntax matches the actual parser
 
-```rust
-pub enum Command {
-    // ... existing variants
-    MyNewCommand {
-        node_id: Option<u32>,
-        my_param: String,
-    },
-}
-```
+### Important extension rules from current implementation
 
-2. **Add JSON conversion** in `Command::to_json()`:
-
-```rust
-Command::MyNewCommand { node_id, my_param } => {
-    let mut params = json!({ "my_param": my_param });
-    if let Some(id) = node_id {
-        params["node id"] = json!(id);
-    }
-    Ok(json!({
-        "command": "my_new_command",
-        "parameters": params,
-    }))
-}
-```
-
-3. **Add parser function**:
-
-```rust
-fn parse_my_new_command(params_str: &str) -> Result<Command> {
-    let params = parse_params(params_str)?;
-    let node_id = parse_node_id(&params)?;
-    let my_param = get_param(&params, "my_param")
-        .ok_or_else(|| anyhow!("Missing my_param"))?
-        .to_string();
-    
-    Ok(Command::MyNewCommand { node_id, my_param })
-}
-```
-
-4. **Add to command dispatcher** in `parse_command()`:
-
-```rust
-match cmd_lower.as_str() {
-    // ... existing matches
-    "my_new_command" => {
-        let params = params_str.ok_or_else(|| anyhow!("my_new_command requires parameters"))?;
-        parse_my_new_command(params)
-    }
-    // ...
-}
-```
-
-5. **Add tests**:
-
-```rust
-#[test]
-fn test_parse_my_new_command() {
-    let cmd = parse_command("my_new_command(node_id=21, my_param=value)").unwrap();
-    match cmd {
-        Command::MyNewCommand { node_id, my_param } => {
-            assert_eq!(node_id, Some(21));
-            assert_eq!(my_param, "value");
-        }
-        _ => panic!("Wrong command type"),
-    }
-}
-```
-
-## Code Style
-
-The project follows Rust idioms:
-
-- Use `Result<T>` and `?` operator for error propagation
-- Avoid unnecessary cloning (pass by reference where possible)
-- Use `anyhow::Result` for application errors
-- Use `thiserror` for library-style errors (if needed)
-- Prefer explicit error messages with context
-- Keep functions focused and testable
+- If a command is meant to be accepted from the CLI, its exact top-level name must be present in `parse_command()`.
+- If a string parameter is intended to support quoted input cleanly, parser behavior may need to be improved because current logic preserves quote characters.
+- If a command is meant to be node-scoped, ensure the parser, JSON conversion, hub handling, and docs all agree on that scope.
 
 ## Performance Considerations
 
-- HTTP client is reused across requests in interactive mode
-- Minimal allocations in the hot path
-- Async I/O for network operations
-- Efficient string parsing without regex overhead
+- The HTTP client is reused across requests in interactive mode
+- The parser is simple string processing without regex overhead
+- The tool is network-bound in normal usage
 
 ## Security
 
-- TLS verification is enabled by default (via `reqwest`)
-- API keys are read from config file (never hardcoded)
-- No sensitive data is logged
-- Config file should have restrictive permissions (e.g., `chmod 600 config.toml`)
+- TLS verification is enabled by default via `reqwest`
+- API keys are read from config file and not hardcoded
+- No local secret store is used
+- Config file should have restrictive permissions such as `chmod 600 config.toml`
 
 ## Troubleshooting
 
 ### Common Issues
 
 **"Failed to load configuration"**
-- Ensure `config.toml` exists in the current directory or specify with `--config`
+- Ensure `config.toml` exists in the current directory or specify it with `--config`
 - Check TOML syntax
 
 **"401 Unauthorized"**
-- Verify API key in config.toml matches the hub's `cli_api_key`
+- Verify the API key in `config.toml` matches the hub's `cli_api_key`
 
 **"Failed to send request to hub"**
 - Check network connectivity
-- Verify hub URL is correct and reachable
-- Check firewall settings
+- Verify the hub URL is correct and reachable
 
-**"Invalid ISO 8601 timestamp"**
-- Ensure timestamps include timezone information
-- Use format: `YYYY-MM-DDTHH:MM:SS+HH:MM` or `YYYY-MM-DDTHH:MM+HH:MM`
+**"Unknown command: command"**
+- The current parser accepts `run_command(...)`, not `command(...)`
+
+**"set_update_interval does not accept node_id parameter"**
+- The current parser treats `set_update_interval(...)` as global-only
 
 ## Future Enhancements
 
 Potential improvements:
 
-- Command history in interactive mode (using `rustyline`)
-- Tab completion for commands
-- Configuration validation on startup
-- Batch command file support
-- Better error messages with suggestions
-- Command output formatting options (JSON, table, etc.)
-- Dry-run mode to preview JSON payloads
+- command history in interactive mode
+- tab completion for commands
+- configuration validation on startup
+- better parser support for quoted strings
+- a compatibility alias from `command(...)` to `run_command(...)`
+- output formatting options
+- dry-run mode to preview JSON payloads
