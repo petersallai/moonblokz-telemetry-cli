@@ -12,10 +12,9 @@ pub struct Config {
 
 impl Config {
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let content = std::fs::read_to_string(path.as_ref())
-            .context("Failed to read config file")?;
-        
-        toml::from_str(&content)
-            .context("Failed to parse config file")
+        let content =
+            std::fs::read_to_string(path.as_ref()).context("Failed to read config file")?;
+
+        toml::from_str(&content).context("Failed to parse config file")
     }
 }

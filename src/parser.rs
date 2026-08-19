@@ -73,7 +73,10 @@ impl Command {
                     "parameters": params,
                 }))
             }
-            Command::SetLogFilter { node_id, log_filter } => {
+            Command::SetLogFilter {
+                node_id,
+                log_filter,
+            } => {
                 let mut params = json!({
                     "log_filter": log_filter,
                 });
@@ -178,7 +181,8 @@ pub fn parse_command(input: &str) -> Result<Command> {
 
     match cmd_lower.as_str() {
         "set_update_interval" => {
-            let params = params_str.ok_or_else(|| anyhow!("set_update_interval requires parameters"))?;
+            let params =
+                params_str.ok_or_else(|| anyhow!("set_update_interval requires parameters"))?;
             parse_set_update_interval(params)
         }
         "set_log_level" => {
@@ -206,7 +210,8 @@ pub fn parse_command(input: &str) -> Result<Command> {
             parse_reboot_probe(params)
         }
         "start_measurement" => {
-            let params = params_str.ok_or_else(|| anyhow!("start_measurement requires parameters"))?;
+            let params =
+                params_str.ok_or_else(|| anyhow!("start_measurement requires parameters"))?;
             parse_start_measurement(params)
         }
         _ => Err(anyhow!("Unknown command: {}", cmd_name)),
@@ -227,7 +232,10 @@ fn parse_params(params_str: &str) -> Result<Vec<(String, String)>> {
                 in_quotes = !in_quotes;
                 current_value.push(ch);
             } else if ch == ',' && !in_quotes {
-                params.push((current_key.trim().to_string(), current_value.trim().to_string()));
+                params.push((
+                    current_key.trim().to_string(),
+                    current_value.trim().to_string(),
+                ));
                 current_key.clear();
                 current_value.clear();
                 in_value = false;
@@ -244,19 +252,27 @@ fn parse_params(params_str: &str) -> Result<Vec<(String, String)>> {
     }
 
     if !current_key.is_empty() || !current_value.is_empty() {
-        params.push((current_key.trim().to_string(), current_value.trim().to_string()));
+        params.push((
+            current_key.trim().to_string(),
+            current_value.trim().to_string(),
+        ));
     }
 
     Ok(params)
 }
 
 fn get_param<'a>(params: &'a [(String, String)], key: &str) -> Option<&'a str> {
-    params.iter().find(|(k, _)| k.eq_ignore_ascii_case(key)).map(|(_, v)| v.as_str())
+    params
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case(key))
+        .map(|(_, v)| v.as_str())
 }
 
 fn parse_node_id(params: &[(String, String)]) -> Result<Option<u32>> {
     if let Some(value) = get_param(params, "node_id") {
-        let id = value.parse::<u32>().map_err(|_| anyhow!("Invalid node_id: must be a positive integer"))?;
+        let id = value
+            .parse::<u32>()
+            .map_err(|_| anyhow!("Invalid node_id: must be a positive integer"))?;
         Ok(Some(id))
     } else {
         Ok(None)
@@ -291,13 +307,19 @@ fn parse_set_update_interval(params_str: &str) -> Result<Command> {
 
     // Reject node_id parameter - this command targets all probes
     if get_param(&params, "node_id").is_some() {
-        return Err(anyhow!("set_update_interval does not accept node_id parameter"));
+        return Err(anyhow!(
+            "set_update_interval does not accept node_id parameter"
+        ));
     }
 
-    let start_time_str = get_param(&params, "start_time").ok_or_else(|| anyhow!("Missing start_time parameter"))?;
-    let end_time_str = get_param(&params, "end_time").ok_or_else(|| anyhow!("Missing end_time parameter"))?;
-    let active_period_str = get_param(&params, "active_period").ok_or_else(|| anyhow!("Missing active_period parameter"))?;
-    let inactive_period_str = get_param(&params, "inactive_period").ok_or_else(|| anyhow!("Missing inactive_period parameter"))?;
+    let start_time_str =
+        get_param(&params, "start_time").ok_or_else(|| anyhow!("Missing start_time parameter"))?;
+    let end_time_str =
+        get_param(&params, "end_time").ok_or_else(|| anyhow!("Missing end_time parameter"))?;
+    let active_period_str = get_param(&params, "active_period")
+        .ok_or_else(|| anyhow!("Missing active_period parameter"))?;
+    let inactive_period_str = get_param(&params, "inactive_period")
+        .ok_or_else(|| anyhow!("Missing inactive_period parameter"))?;
 
     let start_time = parse_iso_timestamp(start_time_str)?;
     let end_time = parse_iso_timestamp(end_time_str)?;
@@ -327,7 +349,11 @@ fn parse_set_log_level(params_str: &str) -> Result<Command> {
     // Validate log level
     match log_level.as_str() {
         "TRACE" | "DEBUG" | "INFO" | "WARN" | "ERROR" => {}
-        _ => return Err(anyhow!("Invalid log_level: must be TRACE, DEBUG, INFO, WARN, or ERROR")),
+        _ => {
+            return Err(anyhow!(
+                "Invalid log_level: must be TRACE, DEBUG, INFO, WARN, or ERROR"
+            ))
+        }
     }
 
     Ok(Command::SetLogLevel { node_id, log_level })
@@ -341,14 +367,19 @@ fn parse_set_log_filter(params_str: &str) -> Result<Command> {
         .ok_or_else(|| anyhow!("Missing log_filter parameter"))?
         .to_string();
 
-    Ok(Command::SetLogFilter { node_id, log_filter })
+    Ok(Command::SetLogFilter {
+        node_id,
+        log_filter,
+    })
 }
 
 fn parse_command_cmd(params_str: &str) -> Result<Command> {
     let params = parse_params(params_str)?;
     let node_id = parse_node_id(&params)?;
 
-    let command = get_param(&params, "command").ok_or_else(|| anyhow!("Missing command parameter"))?.to_string();
+    let command = get_param(&params, "command")
+        .ok_or_else(|| anyhow!("Missing command parameter"))?
+        .to_string();
 
     Ok(Command::Command { node_id, command })
 }
@@ -377,9 +408,11 @@ fn parse_reboot_probe(params_str: &str) -> Result<Command> {
 fn parse_start_measurement(params_str: &str) -> Result<Command> {
     let params = parse_params(params_str)?;
 
-    let node_id = parse_node_id(&params)?.ok_or_else(|| anyhow!("node_id is required for start_measurement command"))?;
+    let node_id = parse_node_id(&params)?
+        .ok_or_else(|| anyhow!("node_id is required for start_measurement command"))?;
 
-    let sequence_str = get_param(&params, "sequence").ok_or_else(|| anyhow!("Missing sequence parameter"))?;
+    let sequence_str =
+        get_param(&params, "sequence").ok_or_else(|| anyhow!("Missing sequence parameter"))?;
 
     let sequence = sequence_str
         .parse::<u32>()
@@ -450,6 +483,9 @@ mod tests {
     fn test_parse_start_measurement_requires_node_id() {
         let result = parse_command("start_measurement(sequence=1)");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("node_id is required"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("node_id is required"));
     }
 }
