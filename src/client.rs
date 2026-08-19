@@ -15,19 +15,20 @@ impl Client {
             .timeout(std::time::Duration::from_secs(30))
             .build()
             .context("Failed to create HTTP client")?;
-        
+
         Ok(Self {
             config,
             http_client,
         })
     }
-    
+
     pub async fn send_command(&self, command: &Command) -> Result<String> {
         let json_payload = command.to_json()?;
-        
+
         let url = format!("{}/command", self.config.hub_url);
-        
-        let response = self.http_client
+
+        let response = self
+            .http_client
             .post(&url)
             .header("Content-Type", "application/json")
             .header("X-Api-Key", &self.config.api_key)
@@ -35,9 +36,9 @@ impl Client {
             .send()
             .await
             .context("Failed to send request to hub")?;
-        
+
         let status = response.status();
-        
+
         match status {
             StatusCode::OK => Ok("OK".to_string()),
             StatusCode::UNAUTHORIZED => {
@@ -51,9 +52,7 @@ impl Client {
                 let body = response.text().await.unwrap_or_default();
                 Err(anyhow!("Server error: {} - {}", status.as_u16(), body))
             }
-            _ => {
-                Err(anyhow!("Unexpected response: {}", status.as_u16()))
-            }
+            _ => Err(anyhow!("Unexpected response: {}", status.as_u16())),
         }
     }
 }
